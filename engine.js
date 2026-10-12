@@ -1,4 +1,4 @@
-import { BOARD as globalBoard, CHALLENGES, DEFAULTS } from "./data.js";
+import { BOARD as globalBoard, CHALLENGES, DEFAULTS } from "./data.js?v=2";
 export const copy = (x) => structuredClone(x);
 // 6行5列采用按列蛇形：1右下、6右上、7相邻列顶部，30左上。
 export const BOARD_LAYOUT = Array.from({ length: 6 }, (_, row) =>
@@ -13,7 +13,14 @@ export function createGame(
   seed = crypto.getRandomValues(new Uint32Array(1))[0],
 ) {
   const c = copy(config);
-  return {
+  if (!Array.isArray(c.players) || c.players.length < 1 || c.players.length > 6)
+    throw Error("请选择1至6名参与者");
+  if (
+    c.players.some((p) => !p.name?.trim()) ||
+    new Set(c.players.map((p) => p.name.trim())).size !== c.players.length
+  )
+    throw Error("请填写不同的参与者昵称");
+  const game = {
     schemaVersion: 1,
     gameId: crypto.randomUUID(),
     revision: 0,
@@ -38,7 +45,11 @@ export function createGame(
     turnIndex: 0,
     completed: [],
     phase: "setup",
-    pending: { type: "initiative", ids: [0, 1, 2], values: {} },
+    pending: {
+      type: "initiative",
+      ids: c.players.map((_, id) => id),
+      values: {},
+    },
     decks: { C: [], R: [], P: [] },
     discards: { C: [], R: [], P: [] },
     favorRemaining: 3,
@@ -48,7 +59,7 @@ export function createGame(
     log: c.startBonus?.consented
       ? [
           {
-            text: `三人开局同意：${c.players[c.startBonus.id].name} 使用上局亚军奖励，起点+2`,
+            text: `全员开局同意：${c.players[c.startBonus.id].name} 使用上局亚军奖励，起点+2`,
             time: new Date().toISOString(),
           },
         ]
@@ -59,6 +70,13 @@ export function createGame(
     rewardChoices: {},
     updatedAt: new Date().toISOString(),
   };
+  if (c.orderMode === "seated") {
+    game.order = c.players.map((_, id) => id);
+    game.phase = "turn_start";
+    game.pending = null;
+    log(game, "按主持人设置的顺序开始");
+  }
+  return game;
 }
 function random(g) {
   let x = g.seed;
@@ -122,7 +140,7 @@ function endEvent(g) {
   g.pending = null;
   if (active(g).length === 0) {
     g.phase = "finished";
-    log(g, "三人完赛，角色解除。请确认彼此感受。");
+    log(g, "全部完赛，角色解除。请确认彼此感受。");
     return;
   }
   if (g.extraChallenge) {
@@ -337,6 +355,7 @@ function resolveTask(g, skip = false, choice = "") {
     endEvent(g);
   } else if (id === "R07") {
     const v = die(g);
+    g.lastExtraRoll = { id: p.id, value: v };
     log(g, `额外机会：${v}点，前进${Math.min(v, 3)}，不增加轮数`);
     settleMove(g, [[p.id, Math.min(v, 3)]]);
   } else if (id === "R09") {
@@ -577,7 +596,10 @@ function body(g, a) {
       )
     )
       throw Error("请选择每人名次（允许并列）");
-    const amounts = ev.ids.length === 3 ? [2, 1, 0] : [2, 0];
+    const amounts =
+      ev.ids.length === 2
+        ? [2, 0]
+        : ev.ids.map((_, i) => (i === 0 ? 2 : i === 1 ? 1 : 0));
     const ids = move(
       g,
       ev.ids.map((id) => [id, amounts[a.ranks[id] - 1]]),
@@ -623,8 +645,9 @@ function body(g, a) {
   }
   if (a.type === "epiloguePk") {
     if (g.phase !== "finished" || g.pending) throw Error("请先完成棋局");
-    const a = g.players.find((p) => p.rank === 3).id,
+    const a = g.players.find((p) => p.rank === g.players.length)?.id,
       b = g.players.find((p) => p.rank === 1).id;
+    if (a === undefined || a === b) throw Error("至少两人才能进行趣味挑战");
     g.pending = { type: "epiloguePk", a, b, values: {} };
     log(g, "季军自愿发起趣味称号挑战，不改变排名");
     return;
@@ -719,7 +742,9 @@ export function validate(g) {
   if (
     !g ||
     g.schemaVersion !== 1 ||
-    g.players?.length !== 3 ||
+    !Array.isArray(g.players) ||
+    g.players.length < 1 ||
+    g.players.length > 6 ||
     !Array.isArray(g.order) ||
     !Array.isArray(g.log) ||
     g.favorRemaining < 0 ||
