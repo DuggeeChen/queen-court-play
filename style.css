@@ -1324,3 +1324,42 @@ details[open] > summary {
   color: #b2997c;
   margin-top: 9px;
 }
+
+.landing-icon {
+  font-size: 65px;
+  margin: 22px 0 10px;
+}
+.landing-spot > .spot-pause,
+.move-spot > .spot-pause {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+.moving-players > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  text-align: left;
+}
+.moving-players strong {
+  font-size: 46px;
+  color: var(--wine);
+  margin-left: auto;
+}
+.moving-players small {
+  font-size: 14px;
+  margin-left: 4px;
+}
+.moving-players span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.turn-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:16px 0; }
+.turn-summary > div { background:var(--paper,#fffaf2); border:1px solid #dfcbae; border-radius:14px; padding:12px; min-width:0; }
+.turn-summary small { display:block; color:var(--muted); margin-bottom:5px; }
+.turn-summary b { display:block; overflow-wrap:anywhere; color:var(--wine); }
+.group-dice { display:flex; flex-wrap:wrap; justify-content:center; gap:18px; margin:20px 0; }
+.group-dice > div { display:grid; gap:12px; }
+@media(max-width:480px) { .turn-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }

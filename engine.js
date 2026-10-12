@@ -1,4 +1,4 @@
-import { BOARD as globalBoard, CHALLENGES, DEFAULTS } from "./data.js?v=2";
+import { BOARD as globalBoard, CHALLENGES, DEFAULTS } from "./data.js?v=3";
 export const copy = (x) => structuredClone(x);
 // 6行5列采用按列蛇形：1右下、6右上、7相邻列顶部，30左上。
 export const BOARD_LAYOUT = Array.from({ length: 6 }, (_, row) =>
@@ -325,7 +325,18 @@ function applyRoll(g, value) {
     bonus,
   };
   const ids = move(g, [[p.id, value + bonus]]);
+  const cell = (g.config.board || globalBoard)[p.pos - 1];
+  g.lastLanding = {
+    id: p.id,
+    pos: p.pos,
+    type: "board",
+    name: cell?.name || "起点",
+    text: cell?.text || "",
+  };
   if (p.pos >= g.config.goal) {
+    g.lastLanding.type = "finish";
+    g.lastLanding.name = "加冕";
+    g.lastLanding.text = "抵达终点，记录名次";
     finish(g, ids, () => endEvent(g));
     return;
   }
@@ -333,6 +344,9 @@ function applyRoll(g, value) {
     .filter((x) => x.id !== p.id && x.pos === p.pos)
     .map((p) => p.id);
   if (opponents.length) {
+    g.lastLanding.type = "collision";
+    g.lastLanding.name = "同格争宠";
+    g.lastLanding.text = "碰撞替代格子事件，接下来骰子PK";
     log(g, "发生碰撞：替代格子事件");
     pk(g, opponents);
   } else boardEvent(g);
@@ -445,6 +459,7 @@ function body(g, a) {
       "顺序骰：" +
         ev.ids.map((id) => `${g.players[id].name} ${ev.values[id]}`).join("，"),
     );
+    g.lastDice = { values: { ...ev.values } };
     const groups = Object.values(ev.values).reduce(
       (o, v) => ({ ...o, [v]: [...(o[v] || []), ...[]] }),
       {},
@@ -565,6 +580,7 @@ function body(g, a) {
     const x = die(g),
       y = die(g);
     ev.values = { [ev.a]: x, [ev.b]: y };
+    g.lastDice = { values: { ...ev.values } };
     log(g, `骰子PK ${x} : ${y}`);
     if (x === y) {
       ev.tie = true;
@@ -618,6 +634,7 @@ function body(g, a) {
       const values = {};
       for (const id of group) values[id] = die(g);
       ev.values = values;
+      g.lastDice = { values: { ...values } };
       log(
         g,
         "同批完赛PK：" +
@@ -658,6 +675,7 @@ function body(g, a) {
     const x = die(g),
       y = die(g);
     ev.values = { [ev.a]: x, [ev.b]: y };
+    g.lastDice = { values: { ...ev.values } };
     log(g, `终局趣味PK ${x} : ${y}（不改排名）`);
     if (x !== y) ev.winner = x > y ? ev.a : ev.b;
     return;

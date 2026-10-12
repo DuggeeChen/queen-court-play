@@ -1,4 +1,4 @@
-import { BOARD, CARDS, DEFAULTS } from "./data.js?v=2";
+import { BOARD, CARDS, DEFAULTS } from "./data.js?v=3";
 import {
   createGame,
   dispatch,
@@ -7,7 +7,7 @@ import {
   validate,
   BOARD_LAYOUT,
   NUMERIC_CARDS,
-} from "./engine.js?v=2";
+} from "./engine.js?v=3";
 const $ = (s) => document.querySelector(s),
   esc = (s) =>
     String(s ?? "").replace(
@@ -96,7 +96,8 @@ let defaults = copy(DEFAULTS),
   saved = true,
   animationActor = null,
   setupPlayers = [],
-  count = 3;
+  count = 3,
+  continueFX = null;
 const GAME_KEY = "queen-game-demo",
   SETTINGS_KEY = "queen-v2-settings";
 try {
@@ -153,6 +154,30 @@ function cancel() {
   fx = null;
   positions = null;
 }
+function waitForContinue(signal) {
+  return new Promise((resolve, reject) => {
+    continueFX = resolve;
+    signal.addEventListener("abort", () => {
+      continueFX = null;
+      reject(new DOMException("Cancelled", "AbortError"));
+    }, { once: true });
+  });
+}
+async function showEffect(before, signal, title = "效果已结算") {
+  const changes = g.players.flatMap((p) => {
+    const old = before.players[p.id], parts = [];
+    if (p.pos !== old.pos) parts.push(`第${old.pos}格 → 第${p.pos}格`);
+    for (const [key, label] of [["shield", "护盾"], ["reroll", "重掷机会"], ["medals", "勋章"]])
+      if (p[key] !== old[key]) parts.push(`${label} ${old[key]} → ${p[key]}`);
+    if (p.rank !== old.rank) parts.push(`第${p.rank}名完赛`);
+    return parts.length ? [`${p.name}：${parts.join(" · ")}`] : [];
+  });
+  if (!changes.length) return;
+  fx = { type: "landing", name: "本次效果", title, text: changes.join("；"), effect: true };
+  render();
+  await waitForContinue(signal);
+  fx = null;
+}
 function delay(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -197,7 +222,7 @@ function next() {
   return null;
 }
 function header() {
-  return `<header class="topbar"><button class="brand" data-act="home"><span>♛</span> 女王争宠棋 <small>御前之局</small></button><div class="top-tools"><button class="save-dot" data-act="storage" aria-label="${saved ? "当前浏览器已保存" : "保存失败"}"><i class="${saved ? "" : "failed"}"></i></button>${screen === "game" && g && !["finished", "stopped", "paused"].includes(g.phase) ? '<button class="pause-button" data-act="pause">Ⅱ 暂停</button>' : ""}<button class="menu-button" data-act="menu" aria-label="打开菜单">☰</button></div></header>`;
+  return `<header class="topbar"><button class="brand" data-act="home"><span>♛</span> 女王的棋局 <small>御前之局</small></button><div class="top-tools"><button class="save-dot" data-act="storage" aria-label="${saved ? "当前浏览器已保存" : "保存失败"}"><i class="${saved ? "" : "failed"}"></i></button>${screen === "game" && g && !["finished", "stopped", "paused"].includes(g.phase) ? '<button class="pause-button" data-act="pause">Ⅱ 暂停</button>' : ""}<button class="menu-button" data-act="menu" aria-label="打开菜单">☰</button></div></header>`;
 }
 function home() {
   return `<div class="home"><div class="home-crown">♛</div><div class="eyebrow">女王的棋局，你来掌控</div><h1>今晚，谁最得宠？</h1><p>你来主持。轮到谁，你可以代摇，<br>也可以把手机递给他，只点一下 🎲。</p><button class="big-button primary" data-act="new">👑 开一局</button>${g ? '<button class="big-button subtle" data-act="continue">继续上次棋局 →</button>' : ""}<div class="home-note">免登录 · 1—6人 · 30格<br>进度只保存在当前浏览器，不跨设备同步</div><button class="text-button" data-act="editor">编辑卡片与默认设置</button></div>`;
@@ -266,17 +291,17 @@ function board() {
     .join("")}</div>`;
 }
 function players() {
-  return `<div class="player-strip">${g.players.map((p) => `<button data-act="player" data-id="${p.id}" class="player-chip ${actor()?.id === p.id && p.rank === null ? "active" : ""}" style="--p:${p.color}">${token(p)}<div><strong>${esc(p.name)}</strong><small>${p.rank ? `第${p.rank}名` : `<b>${p.pos}</b>/${g.config.goal}格`}</small></div><span class="chip-tools">${p.shield ? `🛡️${p.shield}` : ""}${p.favor ? ` ✨${p.favor}` : ""}${p.medals ? ` 🎖️${p.medals}` : ""}</span></button>`).join("")}</div>`;
+  return `<div class="player-strip">${g.players.map((p) => `<button data-act="player" data-id="${p.id}" class="player-chip ${displayActor()?.id === p.id && p.rank === null ? "active" : ""}" style="--p:${p.color}">${token(p)}<div><strong>${esc(p.name)}</strong><small>${p.rank ? `第${p.rank}名` : `<b>${positions?.[p.id] ?? p.pos}</b>/${g.config.goal}格`}</small></div><span class="chip-tools">${p.shield ? `🛡️${p.shield}` : ""}${p.favor ? ` ✨${p.favor}` : ""}${p.medals ? ` 🎖️${p.medals}` : ""}</span></button>`).join("")}</div>`;
 }
 function game() {
   if (g.phase === "paused")
     return `<div class="paused"><span>Ⅱ</span><h1>先暂停一下</h1><p>任务和计时已隐藏，不扣分。</p><button class="big-button primary" data-act="resume">继续棋局</button><button class="text-button" data-act="stop">结束这局</button></div>`;
   if (g.phase === "stopped")
     return `<div class="home"><div class="home-crown">♛</div><h1>棋局已结束</h1><p>角色解除，请确认彼此感受。</p><button class="big-button primary" data-act="new">重新开局</button></div>`;
-  if (g.phase === "finished") return finished();
+  if (g.phase === "finished" && !busy) return finished();
   const p = displayActor(),
-    n = next();
-  return `<div class="game-wrap"><div class="turn-heading"><div><div class="eyebrow">第${g.round}轮 · ${esc(g.config.host)}主持</div><h1>${g.phase === "setup" ? "决定出场顺序" : `${esc(p?.name)}，轮到你了`}</h1></div>${g.lastRoll ? `<div class="last-die">${dice(g.lastRoll.chosen)}<span>上次 <b>${g.lastRoll.chosen}</b>点</span></div>` : ""}</div>${players()}<div class="play-layout"><section class="board-area">${board()}<div class="start-line"><span>起点0</span>${g.players
+    n = busy && animationActor !== actor()?.id ? actor() : next();
+  return `<div class="game-wrap"><div class="turn-heading"><div><div class="eyebrow">第${g.round}轮 · ${esc(g.config.host)}主持</div><h1>${g.phase === "setup" ? "决定出场顺序" : `${esc(p?.name)}，轮到你了`}</h1></div>${g.lastRoll && fx?.type !== "dice" ? `<div class="last-die">${dice(g.lastRoll.chosen)}<span>上次 <b>${g.lastRoll.chosen}</b>点</span></div>` : ""}</div><div class="turn-summary"><div><small>当前行动</small><b>${esc(p?.name || "—")}</b></div><div><small>下一位</small><b>${esc(n?.name || "本人继续")}</b></div><div><small>骰子</small><b>${fx?.type === "dice" ? "摇动中" : g.lastRoll ? `${g.lastRoll.chosen}点` : "待掷"}</b></div><div><small>当前位置</small><b>第${positions?.[p?.id] ?? p?.pos ?? 0}格</b></div></div>${players()}<div class="play-layout"><section class="board-area">${board()}<div class="start-line"><span>起点0</span>${g.players
     .filter((p) => (positions?.[p.id] ?? p.pos) === 0)
     .map((p) => token(p, "mini"))
     .join(
@@ -291,18 +316,30 @@ function modal(body, kind = "") {
   return `<div class="overlay ${kind}"><section class="spotlight ${kind}" role="dialog" aria-modal="true" aria-labelledby="event-title">${body}</section></div>`;
 }
 function fxView() {
-  if (!fx || fx.type === "move") return "";
-  const pause =
+  if (!fx) return "";
+  const pause = g.phase === "finished" ? "" :
     '<button class="spot-pause" data-act="pause" aria-label="暂停动画">Ⅱ</button>';
   if (fx.type === "dice")
     return modal(
-      `${pause}<div class="eyebrow">${esc(fx.name)} 正在摇骰</div><h2 id="event-title">这一掷，会去哪？</h2><div class="dice-stage rolling">🎲</div>`,
+      `${pause}<div class="eyebrow">${esc(fx.name)} 正在摇骰 · 2秒后揭晓</div><h2 id="event-title">骰子转动中…</h2><div class="dice-stage rolling">🎲</div>`,
       "dice-spot",
     );
   if (fx.type === "result")
     return modal(
       `${pause}<div class="eyebrow">${esc(fx.name)} 摇到了</div><h2 class="result-number" id="event-title">${fx.value}<small>点</small></h2>${dice(fx.value, true)}<p class="movement-note">${fx.bonus ? `偏爱令+${fx.bonus} · ` : ""}${fx.extra ? "额外机会 · " : ""}前进${fx.extra ? Math.min(fx.value, 3) : fx.value + (fx.bonus || 0)}格</p>`,
       "dice-spot",
+    );
+  if (fx.type === "groupResult")
+    return modal(`${pause}<div class="eyebrow">骰子结果</div><h2 id="event-title">${esc(fx.title)}</h2><div class="group-dice">${fx.results.map(([id, value]) => `<div><b>${esc(g.players[id].name)}</b>${dice(value)}<strong>${value}点</strong></div>`).join("")}</div><button class="big-button primary" data-act="continueFX">看到了，继续</button>`, "dice-spot");
+  if (fx.type === "move")
+    return modal(
+      `${pause}<div class="eyebrow">棋子正在前进</div><h2 id="event-title">正在走棋</h2><div class="moving-players">${fx.movers.map((p) => `<div><b>${esc(p.name)}</b><strong>${positions?.[p.id] ?? p.target}<small>格</small></strong><span>目标：第${p.target}格</span></div>`).join("")}</div>`,
+      "move-spot",
+    );
+  if (fx.type === "landing")
+    return modal(
+      `${pause}<div class="eyebrow">${fx.effect ? "结算结果" : `${esc(fx.name)} 已走到`}</div><div class="landing-icon">📍</div><h2 id="event-title">${esc(fx.title)}</h2><p class="task-brief">${esc(fx.text)}</p><button class="big-button primary" data-act="continueFX">${fx.effect ? "看到了，继续" : "处理落点事件 →"}</button>`,
+      "landing-spot",
     );
   return modal(
     `${pause}<span class="card-category ${fx.card?.[0]}">${fx.card?.[0] === "P" ? "♠ 惩罚" : "✨ 恩宠"}</span><h2 id="event-title">${esc(fx.title)}</h2><p class="task-brief">${esc(fx.text)}</p><div class="auto-status">● 数值自动结算</div>`,
@@ -523,22 +560,61 @@ function render() {
     preventScroll: true,
   });
 }
-async function walk(before, signal) {
-  const changes = g.players.filter((p) => p.pos !== before.players[p.id].pos);
+async function walk(before, signal, targetPositions = null) {
+  const destination = (p) => targetPositions?.[p.id] ?? p.pos;
+  const changes = g.players.filter(
+    (p) => destination(p) !== before.players[p.id].pos,
+  );
   if (!changes.length) return;
   positions = Object.fromEntries(before.players.map((p) => [p.id, p.pos]));
-  fx = { type: "move" };
+  fx = {
+    type: "move",
+    movers: changes.map((p) => ({
+      id: p.id,
+      name: p.name,
+      target: destination(p),
+    })),
+  };
   render();
   const max = Math.max(
-    ...changes.map((p) => Math.abs(p.pos - positions[p.id])),
+    ...changes.map((p) => Math.abs(destination(p) - positions[p.id])),
   );
   for (let i = 0; i < max; i++) {
     for (const p of changes)
-      if (positions[p.id] !== p.pos)
-        positions[p.id] += Math.sign(p.pos - positions[p.id]);
+      if (positions[p.id] !== destination(p))
+        positions[p.id] += Math.sign(destination(p) - positions[p.id]);
     render();
-    await delay(motion() ? 100 : 0, signal);
+    await delay(motion() ? 160 : 0, signal);
   }
+  if (!targetPositions) positions = null;
+  fx = null;
+  render();
+}
+async function landAndWalk(before, signal) {
+  const landing = g.lastLanding;
+  if (!landing) {
+    await walk(before, signal);
+    return;
+  }
+  const firstTargets = Object.fromEntries(
+    before.players.map((p) => [
+      p.id,
+      p.id === landing.id ? landing.pos : p.pos,
+    ]),
+  );
+  await walk(before, signal, firstTargets);
+  fx = {
+    type: "landing",
+    title: `第${landing.pos}格 · ${landing.name}`,
+    text: landing.text,
+    name: before.players[landing.id].name,
+  };
+  render();
+  await waitForContinue(signal);
+  const middle = copy(before);
+  middle.players.forEach((p) => (p.pos = firstTargets[p.id]));
+  await walk(middle, signal);
+  await showEffect(middle, signal);
   positions = null;
   fx = null;
   render();
@@ -553,14 +629,14 @@ async function numeric(signal) {
     const e = copy(g.pending);
     fx = { type: "numeric", title: e.title, text: briefFor(e), card: e.card };
     render();
-    await delay(motion() ? 1150 : 350, signal);
+    await delay(1400, signal);
     if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
     const before = copy(g);
-    step({ type: "task" });
     if (e.card === "R07") {
-      fx = { type: "dice", name: before.players[g.lastExtraRoll.id].name };
+      fx = { type: "dice", name: before.players[current(before).id].name };
       render();
-      await delay(motion() ? 500 : 0, signal);
+      await delay(2000, signal);
+      step({ type: "task" });
       fx = {
         type: "result",
         name: before.players[g.lastExtraRoll.id].name,
@@ -571,8 +647,10 @@ async function numeric(signal) {
       render();
       await delay(motion() ? 950 : 500, signal);
     }
+    else step({ type: "task" });
     fx = null;
     await walk(before, signal);
+    await showEffect(before, signal, e.title);
   }
 }
 async function animate(a, rolling = false) {
@@ -585,12 +663,19 @@ async function animate(a, rolling = false) {
     const before = copy(g),
       name = actor()?.name;
     animationActor = actor()?.id ?? null;
-    step(a);
-    if (rolling) {
-      const e = g.pending;
+    const groupRoll = ["initiative", "pkRoll", "tieRoll", "epilogueRoll"].includes(a.type);
+    if (rolling || groupRoll) {
       fx = { type: "dice", name };
       render();
-      await delay(motion() ? 650 : 0, signal);
+      await delay(2000, signal);
+      step(a);
+      if (groupRoll) {
+        fx = { type: "groupResult", title: a.type === "initiative" ? "出场顺序" : "PK决胜", results: Object.entries(g.lastDice.values) };
+        render();
+        await waitForContinue(signal);
+        fx = null;
+      } else {
+      const e = g.pending;
       fx = {
         type: "result",
         name,
@@ -603,9 +688,17 @@ async function animate(a, rolling = false) {
       if (a.type === "roll" && !e.compensation && !e.reward) {
         const rollBefore = copy(g);
         step({ type: "chooseRoll", which: "first" });
-        await walk(rollBefore, signal);
+        await landAndWalk(rollBefore, signal);
       }
-    } else await walk(before, signal);
+      }
+    } else {
+      step(a);
+      if (a.type === "chooseRoll") await landAndWalk(before, signal);
+      else {
+        await walk(before, signal);
+        await showEffect(before, signal);
+      }
+    }
     await numeric(signal);
   } catch (e) {
     if (e.name !== "AbortError") toast(e.message);
@@ -620,6 +713,12 @@ async function animate(a, rolling = false) {
   }
 }
 async function act(type, el) {
+  if (type === "continueFX") {
+    const resolve = continueFX;
+    continueFX = null;
+    resolve?.();
+    return;
+  }
   if (type === "pause") {
     cancel();
     clearTimer();
@@ -701,7 +800,7 @@ async function act(type, el) {
       ),
       a = document.createElement("a");
     a.href = url;
-    a.download = "女王棋局备份.json";
+    a.download = "女王的棋局备份.json";
     a.click();
     URL.revokeObjectURL(url);
     return;
