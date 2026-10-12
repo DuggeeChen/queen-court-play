@@ -77,7 +77,7 @@ function cache() {
 function save() {
   cache();
   if (!cloud.user) {
-    status = "仅本机备份 · 未接入云端存档";
+    status = "已保存至当前浏览器 · 不跨设备同步";
     renderStatus();
     return;
   }
@@ -137,13 +137,13 @@ async function loadCloud() {
   render();
 }
 function header() {
-  return `<header class="top"><div class="brand"><span class="crown">♛</span>女王争宠棋 <span class="eyebrow">THE ROYAL COURT</span></div><div class="top-actions"><span class="muted">${cloud.user ? esc(cloud.user.email) : "主持人 · 本机试玩"}</span>${cloud.user ? '<button data-act="loadCloud">加载云端</button><button data-act="logout">退出登录</button>' : `<button data-act="login" ${cloud.configured ? "" : "disabled"}>${cloud.configured ? "主持人登录" : "云端尚未配置"}</button>`}<button class="quiet" data-act="home">个人主页</button></div></header>`;
+  return `<header class="top"><div class="brand"><span class="crown">♛</span>女王争宠棋 <span class="eyebrow">THE ROYAL COURT</span></div><div class="top-actions"><span class="muted">${cloud.user ? esc(cloud.user.email) : "主持人 · 免登录在线版"}</span>${cloud.user ? '<button data-act="loadCloud">加载云端</button><button data-act="logout">退出登录</button>' : `<button data-act="login" ${cloud.configured ? "" : "disabled"}>${cloud.configured ? "主持人登录" : "免登录在线版"}</button>`}<button class="quiet" data-act="home">个人主页</button></div></header>`;
 }
 function banner() {
-  return `<div class="banner" id="save-status">${esc(status || (!cloud.configured ? "仅本机试玩：真实登录与跨设备云端存档尚未配置。" : "尚未登录 · 本机试玩，登录后才可保存至云端。"))}</div>`;
+  return `<div class="banner" id="save-status">${esc(status || (!cloud.configured ? "在线版 · 进度保存在当前浏览器，换设备不会自动同步。" : "在线免登录 · 当前浏览器存档，不跨设备同步。"))}</div>`;
 }
 function home() {
-  return `<div class="hero"><section><div class="eyebrow">一位女王 · 三位侍从 · 一场公平角逐</div><h1>今夜，谁将赢得<br>女王的偏爱？</h1><p>骰子决定运气，表演赢得认可。沿三十格宫廷之路前行，争取首席侍从的加冕。</p><div class="actions"><button class="primary" data-act="setup">♛ 布置新棋局</button>${g ? '<button data-act="continue">继续最近棋局 →</button>' : ""}</div><p class="muted">四人同场共用一台设备。角色只影响风格，不改变数值。<br>所有任务均可无责替换或跳过，暂停永远优先。</p></section><section class="hero-art"><div class="eyebrow">御前之局</div><div class="serif">命令、争宠与加冕</div><hr><div class="tokens">${DEFAULTS.players.map((p, i) => token(p, i)).join("")}</div><p>30 格 / 3 位竞赛者 / 32 张任务卡</p><span class="muted" style="color:#d0b8a2">酒红宫廷 · 暖金恩宠 · 公平起点</span></section></div><div class="grid3"><section class="panel"><h3>♧ 自己的卡池</h3><p class="muted">改写任务、禁用卡片、设置表演时长。修改作为下局默认设置，进行中的规则保持开局快照。</p><button data-act="editor">编辑默认任务池</button></section><section class="panel"><h3>♜ 随时暂停</h3><p class="muted">协商边界与暂停词。没有超时自动惩罚，没有服从分，也没有现实关系排名。</p><button data-act="rules">阅读游戏规则</button></section><section class="panel"><h3>☁ 跨设备继续</h3><p class="muted">${cloud.configured ? "登录后云端保存待结算事件、牌序、道具和排名。单设备控制，旧版本不会覆盖新状态。" : "需要真实 Supabase 认证与数据库配置。当前仅保存本机备份，不具备跨设备同步。"}</p><button data-act="export" ${g ? "" : "disabled"}>导出棋局备份</button></section></div>`;
+  return `<div class="hero"><section><div class="eyebrow">一位女王 · 三位侍从 · 一场公平角逐</div><h1>今夜，谁将赢得<br>女王的偏爱？</h1><p>骰子决定运气，表演赢得认可。沿三十格宫廷之路前行，争取首席侍从的加冕。</p><div class="actions"><button class="primary" data-act="setup">♛ 布置新棋局</button>${g ? '<button data-act="continue">继续最近棋局 →</button>' : ""}</div><p class="muted">四人同场共用一台设备。角色只影响风格，不改变数值。<br>所有任务均可无责替换或跳过，暂停永远优先。</p></section><section class="hero-art"><div class="eyebrow">御前之局</div><div class="serif">命令、争宠与加冕</div><hr><div class="tokens">${DEFAULTS.players.map((p, i) => token(p, i)).join("")}</div><p>30 格 / 3 位竞赛者 / 32 张任务卡</p><span class="muted" style="color:#d0b8a2">酒红宫廷 · 暖金恩宠 · 公平起点</span></section></div><div class="grid3"><section class="panel"><h3>♧ 自己的卡池</h3><p class="muted">改写任务、禁用卡片、设置表演时长。修改作为下局默认设置，进行中的规则保持开局快照。</p><button data-act="editor">编辑默认任务池</button></section><section class="panel"><h3>♜ 随时暂停</h3><p class="muted">协商边界与暂停词。没有超时自动惩罚，没有服从分，也没有现实关系排名。</p><button data-act="rules">阅读游戏规则</button></section><section class="panel"><h3>◇ 棋局备份</h3><p class="muted">${cloud.configured ? "登录后云端保存待结算事件、牌序、道具和排名。单设备控制，旧版本不会覆盖新状态。" : "刷新后可继续当前浏览器里的棋局。换手机或清除浏览器数据不会同步进度；可导出棋局备份。"}</p><button data-act="export" ${g ? "" : "disabled"}>导出棋局备份</button></section></div>`;
 }
 function token(p, i = p.id) {
   return `<span class="token" style="--player:${esc(p.color)}" title="${esc(p.name)}">${i + 1}</span>`;
@@ -642,7 +642,7 @@ document.addEventListener("submit", async (e) => {
       if (cloud.user) {
         await cloud.settings(settings);
         toast("默认卡池已保存至真实云端");
-      } else toast("默认卡池已保存至本机，尚未云端同步");
+      } else toast("默认卡池已保存至当前浏览器");
       dialog = null;
       render();
     }
